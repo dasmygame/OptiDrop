@@ -19,8 +19,8 @@ Embedded Systems project for automated eye dropper wearable device for dry eye a
 
 | Arduino Pro Mini | VL53L0X LiDAR |
 | --- | --- |
-| A4 | MAXIMUM OPEN | 
-| A5 | MAXIMUM RIGHT | 
+| A4 | SDA | 
+| A5 | SCL | 
 | 3.3V | Vin |
 | GND | gnd | 
 
