@@ -32,7 +32,5 @@ Embedded Systems project for automated eye dropper wearable device for dry eye a
 | D11 | CTS |
 | D12 | MOD |
 | GND | gnd |
-| GND | gnd |
 | 3.3V | Vin |
-| GND | gnd |
 
