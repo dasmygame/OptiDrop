@@ -12,6 +12,7 @@ Embedded System software for the OptiDrop Controller (LysanDas Engineering Group
 #include "Adafruit_BluefruitLE_UART.h"
 
 #include "BluefruitConfig.h"
+#include "Adafruit_VL53L0X.h"
 
 #if SOFTWARE_SERIAL_AVAILABLE
   #include <SoftwareSerial.h>
@@ -79,6 +80,10 @@ void error(const __FlashStringHelper*err) {
   while (1);
 }
 
+
+// LiDAR drop sensor
+Adafruit_VL53L0X lox = Adafruit_VL53L0X();
+
 // function prototypes over in packetparser.cpp
 uint8_t readPacket(Adafruit_BLE *ble, uint16_t timeout);
 float parsefloat(uint8_t *buffer);
@@ -86,10 +91,30 @@ void printHex(const uint8_t * data, const uint32_t numBytes);
 
 // the packet buffer
 extern uint8_t packetbuffer[];
-#define sw1 2
+#define sw1 A0
+#define sw2 A1
+#define sw3 A2
+
+// motor controls
+#define close 4
+#define open 5
+#define right 6
+#define left 7
+#define down 8
+#define up 9
+
+// switch states
 int sw1Bool = 0;
-int constState = 0;
+int constState1 = 0;
+
+int sw2Bool = 0;
+int constState2 = 0;
+
+int sw3Bool = 0;
+int constState3 = 0;
+
 int tiltSensor = A5; 
+int tiltSensorValue = 0;
 
 /**************************************************************************/
 /*!
@@ -103,8 +128,6 @@ void setup(void)
   delay(500);
 
   Serial.begin(115200);
-  Serial.println(F("Adafruit Bluefruit App Controller Example"));
-  Serial.println(F("-----------------------------------------"));
 
   /* Initialise the module */
   Serial.print(F("Initialising the Bluefruit LE module: "));
@@ -123,7 +146,6 @@ void setup(void)
       error(F("Couldn't factory reset"));
     }
   }
-
 
   /* Disable command echo from Bluefruit */
   ble.echo(false);
@@ -159,6 +181,7 @@ void setup(void)
 
   Serial.println(F("******************************"));
   pinMode(sw1, INPUT);
+  pinMode(13, OUTPUT);
 
 }
 
@@ -176,14 +199,44 @@ void loop(void)
   // tilt sensor read
   tiltSensorValue = analogRead(tiltSensor);
 
-  if (sw1Bool == 1 &&  constState == 2) {
-        analogWrite(3, 0);
-        analogWrite(4, 0);  
-        constState = 0;
+  VL53L0X_RangingMeasurementData_t measure;
+  Serial.print("Reading drop distance measurement... ");
+  lox.rangingTest(&measure, false); // pass in 'true' to get debug data printout!
+
+  Serial.print("Drop Distance (mm): "); Serial.println(measure.RangeMilliMeter);
+
+  if (measure.RangeMilliMeter < 72) {
+    Serial.println("open");
+    analogWrite(close, 0);
+    analogWrite(open, 255);
+    delay(200);
+  }
+
+  // check if open is at max
+  if (sw1Bool == 1 &&  constState1 == 2) {
+    analogWrite(4, 0);
+    analogWrite(5, 0);  
+    constState1 = 0;
+  }
+
+  // check if up is at right
+  if (sw2Bool == 1 &&  constState2 == 2) {
+    analogWrite(6, 0);
+    analogWrite(7, 0);  
+    constState2 = 0;
+  }
+
+  // check if up is at max
+  if (sw3Bool == 1 &&  constState3 == 2) {
+    analogWrite(7, 0);
+    analogWrite(8, 0);  
+    constState3 = 0;
   }
 
   uint8_t len = readPacket(&ble, BLE_READPACKET_TIMEOUT);
   if (len == 0) return;
+
+
 
   // Buttons
   if (packetbuffer[1] == 'B') {
@@ -191,23 +244,24 @@ void loop(void)
     boolean pressed = packetbuffer[3] - '0';
     Serial.print ("Button "); Serial.print(buttnum);
     char num = (char) buttnum;
+
     if (pressed) {
       Serial.println(" pressed");
 
       // Close constrictor button (button "1" on number pad)
       if (buttnum == 1) {
         Serial.println("close");
-        analogWrite(3, 255);
-        analogWrite(4, 0);
-        constState = 1;
+        analogWrite(close, 255);
+        analogWrite(open, 0);
+        constState1 = 1;
       } 
       
       // Open constrictor button (button "2" on number pad)
       else if (buttnum == 2 && sw1Bool == 0) {
         Serial.println("open");
-        analogWrite(3, 0);
-        analogWrite(4, 255);
-        constState = 2;
+        analogWrite(close, 0);
+        analogWrite(open, 255);
+        constState1 = 2;
       } 
       
       //////////////////////////////////////////////////////////////////////////////////////
@@ -217,54 +271,143 @@ void loop(void)
       // add code within this 'else if' clause and test by pressing "3 button" on number pad
       //
       // controls:
-      // Pin 3 - Close constrictor motor
-      // Pin 4 - Open constrictor motor
-      // Pin 5 - Move Right motor
-      // Pin 6 - Move Left motor
-      // Pin 7 - Move Up motor
-      // Pin 8 - Move Down motor 
+      // Pin 4 - Close constrictor motor
+      // Pin 5 - Open constrictor motor
+      // Pin 6 - Move Right motor
+      // Pin 7 - Move Left motor
+      // Pin 8 - Move Up motor
+      // Pin 9 - Move Down motor 
       //////////////////////////////////////////////////////////////////////////////////////
+      
       else if (buttnum == 3) {
         // Add code for first calibration here
-        Serial.println("Calibration A")
+        Serial.println("Calibration A");
 
+        ///////////////////  RESET TO START POSITION  //////////////////////////////////////
+        // reset right
+        while (sw2Bool == 0) {
+          analogWrite(right, 255);
+          analogWrite(left, 0);
+        }
+        analogWrite(right, 0);
+        analogWrite(left, 0);
+
+        // reset up
+        while (sw2Bool == 0) {
+          analogWrite(up, 255);
+          analogWrite(down, 0);
+        }
+        analogWrite(up, 0);
+        analogWrite(down, 0);
+
+        //////////////////   END RESET   ///////////////////////////////////////////////////
+        
+        ////////////////////////////////////////////////////////////////////////////////////
+        
+        int eyeCount = 0;
+
+        //////////////////   CALIBRATE MODE    /////////////////////////////////////////////
+
+        // calibrate to maximum of 2 eyes
+        while (eyeCount < 2) {
+
+          ///////////////////////
+          ///// RIGHT EYE ///////
+          ///////////////////////
+          if (eyeCount = 0) {
+            analogWrite(left, 255);
+            analogWrite(right, 0);
+            delay(3000);
+            analogWrite(down, 255);
+            analogWrite(up, 0);
+            delay(2000);
+          }
+          analogWrite(left, 0);
+          analogWrite(right, 0);
+          analogWrite(up, 0);
+          analogWrite(down, 0);
+
+          ///////////////////////
+          ///// LEFT EYE ///////
+          ///////////////////////
+          if (eyeCount = 1) {
+            analogWrite(left, 255);
+            analogWrite(right, 0);
+            delay(3000);
+          }
+          analogWrite(left, 0);
+          analogWrite(right, 0);
+          analogWrite(up, 0);
+          analogWrite(down, 0);
+
+
+        //////////////////   END CALIBRATE MODE    /////////////////////////////////////////
+
+        ////////////////////////////////////////////////////////////////////////////////////
+
+        //////////////////   DROP MODE   ///////////////////////////////////////////////////
+        
         // drop mode through tilt sensing
-        if (tiltSensorValue > 150) {
-          Serial.println("close");
-          analogWrite(3, 255);
-          analogWrite(4, 0);
-          constState = 1;
+          int dropDone = 0;
+          if (tiltSensorValue > 150 && dropDone == 0) {
+            int set = 0;
+            while (set == 0) {
+              Serial.println("close");
+              analogWrite(close, 255);
+              analogWrite(open, 0);
+              
+              // check drop distance
+              lox.rangingTest(&measure, false); // pass in 'true' to get debug data printout!
+              Serial.print("Drop Distance (mm): "); Serial.println(measure.RangeMilliMeter);
+
+              // if drop is sensed, open constrictor
+              if (measure.RangeMilliMeter < 72) {
+                Serial.println("open");
+                analogWrite(close, 0);
+                analogWrite(open, 255);
+                delay(1000);
+                set = 1;
+                dropDone = 1;
+              }
+
+            }
+          }
+          eyeCount += 1; 
+        //////////////////   END DROP MODE   ///////////////////////////////////////////////
+        ////////////////////////////////////////////////////////////////////////////////////
         }
       }
+
       //////////////////////////////////////////////////////////////////////////////////////
       //////////////////////////////////////////////////////////////////////////////////////
       
+
       // Left button on trackpad
       else if (buttnum == 7) {
         Serial.println("left");
-        analogWrite(5, 0);
-        analogWrite(6, 255);
+        analogWrite(right, 0);
+        analogWrite(left, 255);
       } 
       
       // Right Button on trackpad
       else if (buttnum == 8) {
         Serial.println("right");
-        analogWrite(5, 255);
-        analogWrite(6, 0);
+        analogWrite(right, 255);
+        analogWrite(left, 0);
       } 
       
       // Up Button on trackpad
       else if (buttnum == 5) {
         Serial.println("up");
-        analogWrite(7, 0);
-        analogWrite(8, 255);
+        analogWrite(down, 0);
+        analogWrite(up, 255);
       } 
       
       // Down Button on trackpad
       else if (buttnum == 6) {
         Serial.println("down");
-        analogWrite(7, 255);
-        analogWrite(8, 0);
+        analogWrite(down, 255);
+        analogWrite(up, 0);
       }
 
     } 
@@ -272,12 +415,12 @@ void loop(void)
     // When no buttons are being pressed, do not move motors at all
     else {
       Serial.println("No Buttons pressed");
-      analogWrite(3, 0);
       analogWrite(4, 0);
       analogWrite(5, 0);
       analogWrite(6, 0);
       analogWrite(7, 0);
       analogWrite(8, 0);
+      analogWrite(9, 0);
     }
 
   }
