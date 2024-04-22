@@ -1,3 +1,4 @@
+
 /*********************************************************************
 
 Embedded System software for the OptiDrop Controller (LysanDas Engineering Group - Atlanta, Georgia)
@@ -196,6 +197,12 @@ void loop(void)
   // constrictor max open switch read
   sw1Bool = digitalRead(sw1);
 
+  // max move right switch read
+  sw2Bool = digitalRead(sw2);
+  
+  // max move up switch read
+  sw3Bool = digitalRead(sw3);
+
   // tilt sensor read
   tiltSensorValue = analogRead(tiltSensor);
 
@@ -387,20 +394,23 @@ void loop(void)
         Serial.println("left");
         analogWrite(right, 0);
         analogWrite(left, 255);
+        constState2 = 1;
       } 
       
       // Right Button on trackpad
-      else if (buttnum == 8) {
+      else if (buttnum == 8 && sw2Bool == 0) {
         Serial.println("right");
         analogWrite(right, 255);
         analogWrite(left, 0);
+        constState2 = 2;
       } 
       
       // Up Button on trackpad
-      else if (buttnum == 5) {
+      else if (buttnum == 5 && sw3Bool == 0) {
         Serial.println("up");
         analogWrite(down, 0);
         analogWrite(up, 255);
+        constState3 = 2;
       } 
       
       // Down Button on trackpad
@@ -408,6 +418,7 @@ void loop(void)
         Serial.println("down");
         analogWrite(down, 255);
         analogWrite(up, 0);
+        constState3 = 1;
       }
 
     } 
