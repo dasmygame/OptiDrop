@@ -10,6 +10,10 @@ https://github.com/user-attachments/assets/38476d21-521e-4b71-aead-8b4aba5a2a31
 
 ![IMG_5692](https://github.com/user-attachments/assets/6c6d27f2-0944-4133-a59a-710e53c1891c)
 
+[url=https://postimg.cc/bd09Z03C][img]https://i.postimg.cc/bd09Z03C/Screenshot-2024-03-12-230434.png[/img][/url]
+
+[url=https://postimg.cc/nMKGXK3c][img]https://i.postimg.cc/nMKGXK3c/Screenshot-2024-03-12-230902.png[/img][/url]
+
 
 | Arduino Pro Mini | Motor Control |
 | --- | --- |
